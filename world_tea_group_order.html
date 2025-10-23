@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>World Tea House | 世界茶饮 - Group Order</title>
+<style>
+    body { font-family: Arial, sans-serif; margin:0; padding:0; background:#fff; color:#000; }
+    header { text-align:center; padding:20px; border-bottom:1px solid #ccc; }
+    h1 { margin:0; font-size:1.5em; }
+    h2 { margin:5px 0 20px; font-size:1em; font-weight:normal; color:#555; }
+    .menu { padding:10px; }
+    .drink { border-bottom:1px solid #eee; padding:10px 0; display:flex; gap:10px; align-items:flex-start; }
+    .drink-img { width:80px; height:80px; background:#f0f0f0; display:flex; align-items:center; justify-content:center; font-size:0.8em; color:#888; }
+    .drink-details { flex:1; }
+    .drink-name { font-weight:bold; }
+    .options { margin:5px 0; display:flex; flex-wrap:wrap; gap:5px; }
+    .options select { padding:5px; font-size:0.9em; }
+    .quantity { display:flex; align-items:center; gap:5px; margin-top:5px; }
+    .quantity button { padding:5px 10px; font-size:1em; cursor:pointer; }
+    .cart { position:fixed; bottom:0; left:0; width:100%; background:#fff; border-top:1px solid #ccc; display:flex; justify-content:space-between; align-items:center; padding:10px; }
+    .cart button { background:#000; color:#fff; border:none; padding:10px 20px; cursor:pointer; font-size:1em; }
+</style>
+</head>
+<body>
+<header>
+<h1>World Tea House | 世界茶饮</h1>
+<h2>Group Order</h2>
+</header>
+<div class="menu" id="menu"></div>
+<div class="cart">
+<span id="cart-summary">0 items - $0.00</span>
+<button id="send-order">Send Order via WhatsApp</button>
+</div>
+<script>
+// ====== Drink Data ======
+const drinks = [
+  {name:"Supreme Lemon King", cn:"霸气柠檬", price:6.90, sizes:["M","L","XL"]},
+  {name:"Supreme Strawberry Tea", cn:"霸气莓果", price:15.90, sizes:["M","L","XL"]},
+  {name:"Supreme Grape Tea", cn:"霸气葡萄", price:8.90, sizes:["M","L","XL"]},
+  {name:"Supreme Peach Tea", cn:"霸气白桃", price:7.90, sizes:["M","L","XL"]},
+  {name:"Supreme Fruit Tea", cn:"霸王水果茶", price:7.90, sizes:["M","L","XL"]},
+  {name:"Watermelon Fruit Tea", cn:"西瓜水果茶", price:6.80, sizes:["M","L","XL"]},
+  {name:"Cantaloupe Fruit Tea", cn:"哈密瓜水果茶", price:6.80, sizes:["M","L","XL"]},
+  {name:"Da Hong Pao Milk Tea", cn:"大红袍奶茶", price:5.80, sizes:["M","L","XL"]},
+  {name:"Lychee Oolong Tea", cn:"荔枝乌龙茶", price:6.50, sizes:["M","L","XL"]}
+];
+
+const sugarLevels = ["0%","25%","50%","75%","100%"];
+const iceLevels = ["No Ice","Less Ice","Normal Ice"];
+const toppings = [
+  {name:"Coconut Jelly", price:0.5}, {name:"Aiyu Jelly", price:0.5}, {name:"Red Bean", price:0.5},
+  {name:"Pearl", price:0.5}, {name:"Barley", price:0.5}, {name:"Pudding", price:0.5},
+  {name:"Fresh Taro", price:1}, {name:"Glutinous Rice", price:1}, {name:"Crystal Ball", price:1},
+  {name:"QQ Taro", price:1}, {name:"Milk Pudding", price:1}, {name:"Cheese", price:1},
+  {name:"Mochi", price:2}
+];
+
+let cart = {};
+
+// ====== Build Menu ======
+const menuDiv = document.getElementById('menu');
+drinks.forEach((drink,i)=>{
+  const drinkDiv = document.createElement('div');
+  drinkDiv.className = 'drink';
+  drinkDiv.innerHTML = `
+    <div class='drink-img'>Image</div>
+    <div class='drink-details'>
+      <div class='drink-name'>${drink.name} ${drink.cn}</div>
+      <div class='options'>
+        Size: <select class='size-select'>${drink.sizes.map(s=>`<option value='${s}'>${s}</option>`).join('')}</select>
+        Sugar: <select class='sugar-select'>${sugarLevels.map(s=>`<option value='${s}'>${s}</option>`).join('')}</select>
+        Ice: <select class='ice-select'>${iceLevels.map(i=>`<option value='${i}'>${i}</option>`).join('')}</select>
+      </div>
+      <div class='options'>
+        Toppings: ${toppings.map((t,ti)=>`<label><input type='checkbox' data-price='${t.price}' data-name='${t.name}'> ${t.name} $${t.price}</label>`).join(' ')}
+      </div>
+      <div class='quantity'>
+        <button class='minus'>-</button>
+        <span class='qty'>0</span>
+        <button class='plus'>+</button>
+      </div>
+    </div>
+  `;
+  menuDiv.appendChild(drinkDiv);
+
+  const minusBtn = drinkDiv.querySelector('.minus');
+  const plusBtn = drinkDiv.querySelector('.plus');
+  const qtySpan = drinkDiv.querySelector('.qty');
+
+  minusBtn.addEventListener('click',()=>{
+    if(cart[i] && cart[i].quantity>0){
+      cart[i].quantity--;
+      if(cart[i].quantity===0) delete cart[i];
+      qtySpan.textContent = cart[i]?cart[i].quantity:0;
+      updateCart();
+    }
+  });
+
+  plusBtn.addEventListener('click',()=>{
+    const size = drinkDiv.querySelector('.size-select').value;
+    const sugar = drinkDiv.querySelector('.sugar-select').value;
+    const ice = drinkDiv.querySelector('.ice-select').value;
+    const selectedToppings = Array.from(drinkDiv.querySelectorAll('input[type=checkbox]:checked')).map(c=>({name:c.dataset.name, price:parseFloat(c.dataset.price)}));
+    const key = i+"_"+size+"_"+sugar+"_"+ice+"_"+selectedToppings.map(t=>t.name).join('-');
+    if(cart[key]){
+      cart[key].quantity++;
+    } else {
+      cart[key] = {drink:drink, size, sugar, ice, toppings:selectedToppings, quantity:1};
+    }
+    qtySpan.textContent = cart[key].quantity;
+    updateCart();
+  });
+});
+
+function updateCart(){
+  let totalItems=0, totalPrice=0;
+  Object.values(cart).forEach(item=>{
+    totalItems+=item.quantity;
+    totalPrice += (item.drink.price + item.toppings.reduce((a,b)=>a+b.price,0))*item.quantity;
+  });
+  document.getElementById('cart-summary').textContent = `${totalItems} items - $${totalPrice.toFixed(2)}`;
+}
+
+// ====== WhatsApp Submission ======
+document.getElementById('send-order').addEventListener('click',()=>{
+  if(Object.keys(cart).length===0) return alert('Please add at least one item.');
+  let msg = 'Hello World Tea House! Here is my group order:\n';
+  Object.values(cart).forEach(item=>{
+    msg += `\n${item.drink.name} ${item.drink.cn} (${item.size}) x${item.quantity} - Sugar: ${item.sugar}, Ice: ${item.ice}`;
+    if(item.toppings.length>0) msg += `, Toppings: ${item.toppings.map(t=>t.name).join(', ')}`;
+  });
+  msg += `\n\nTotal: $${Object.values(cart).reduce((sum,item)=>sum+(item.drink.price+item.toppings.reduce((a,b)=>a+b.price,0))*item.quantity,0).toFixed(2)}`;
+  const waUrl = `https://wa.me/89531998?text=${encodeURIComponent(msg)}`;
+  window.open(waUrl,'_blank');
+});
+</script>
+</body>
+</html>
